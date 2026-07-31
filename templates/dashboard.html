@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Minha carteira — {{ username }}{% endblock %}
+
+{% block body %}
+<main class="max-w-5xl mx-auto px-4 py-10">
+
+    <header class="flex flex-wrap gap-4 justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl text-cyan-400">Minha carteira</h1>
+            <p class="text-sm text-white/50">conectado como {{ username }}</p>
+        </div>
+        <form method="POST" action="/logout">
+            <button type="submit" class="px-4 py-2 text-sm bg-white/5 border border-white/10 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all duration-300">sair</button>
+        </form>
+    </header>
+
+    {% if let Some(notice) = notice %}
+    <p class="mb-6 px-4 py-3 bg-emerald-500/10 border border-emerald-400/30 rounded-xl text-emerald-300 text-sm">{{ notice }}</p>
+    {% endif %}
+
+    <section class="mb-10 p-8 bg-gradient-to-br from-cyan-500/10 to-transparent border border-cyan-400/20 rounded-2xl shadow-[0_0_30px_rgba(34,211,238,0.08)]">
+        <p class="text-sm text-white/50 mb-2">valor total da carteira</p>
+        <p class="text-4xl md:text-5xl text-cyan-400">R$ {{ wallet.total_value_brl() }}</p>
+        <p class="text-sm text-white/40 mt-3">
+            {% if wallet.len() == 1 %}
+            1 ativo na carteira
+            {% else %}
+            {{ wallet.len() }} ativos na carteira
+            {% endif %}
+        </p>
+    </section>
+
+    <section class="mb-10">
+        <h2 class="text-lg text-white/80 mb-4">Posições</h2>
+
+        {% if wallet.is_empty() %}
+        <div class="p-8 bg-white/5 border border-white/10 rounded-2xl text-center">
+            <p class="text-white/60 mb-1">Sua carteira ainda está vazia.</p>
+            <p class="text-sm text-white/40">Use o formulário abaixo para registrar sua primeira compra.</p>
+        </div>
+        {% else %}
+        <div class="overflow-x-auto bg-white/5 border border-white/10 rounded-2xl">
+            <table class="w-full text-sm min-w-[640px]">
+                <thead>
+                    <tr class="text-left text-white/40 border-b border-white/10">
+                        <th class="px-5 py-4 font-normal">ativo</th>
+                        <th class="px-5 py-4 font-normal text-right">quantidade</th>
+                        <th class="px-5 py-4 font-normal text-right">valor unitário</th>
+                        <th class="px-5 py-4 font-normal text-right">total</th>
+                        <th class="px-5 py-4 font-normal text-right">participação</th>
+                        <th class="px-5 py-4 font-normal text-right">vender</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for holding in wallet.holdings %}
+                    <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+                        <td class="px-5 py-4 text-white">{{ holding.name }}</td>
+                        <td class="px-5 py-4 text-right text-white/70">{{ holding.quantity_text() }}</td>
+                        <td class="px-5 py-4 text-right text-white/70">R$ {{ holding.unit_value_brl() }}</td>
+                        <td class="px-5 py-4 text-right text-cyan-400">R$ {{ holding.total_value_brl() }}</td>
+                        <td class="px-5 py-4 text-right text-white/50">{{ wallet.share_of_percent(holding) }}%</td>
+                        <td class="px-5 py-4">
+                            <form method="POST" action="/carteira/vender" class="flex gap-2 justify-end">
+                                <input type="hidden" name="asset_id" value="{{ holding.asset_id }}">
+                                <input
+                                    type="number"
+                                    name="quantity"
+                                    step="any"
+                                    min="0"
+                                    max="{{ holding.quantity }}"
+                                    required
+                                    placeholder="qtd"
+                                    class="w-24 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-right placeholder-white/25 focus:outline-none focus:border-rose-400/50 transition-all duration-300"
+                                >
+                                <button type="submit" class="px-3 py-2 bg-rose-500/15 border border-rose-400/25 rounded-lg text-rose-300 hover:bg-rose-500/25 transition-all duration-300">ok</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </section>
+
+    <section>
+        <h2 class="text-lg text-white/80 mb-4">Registrar compra</h2>
+
+        {% if assets.is_empty() %}
+        <div class="p-8 bg-white/5 border border-white/10 rounded-2xl">
+            <p class="text-white/60 mb-1">Nenhum ativo cadastrado no catálogo.</p>
+            <p class="text-sm text-white/40">Um administrador precisa cadastrar ativos pela API antes que compras sejam possíveis.</p>
+        </div>
+        {% else %}
+        <form method="POST" action="/carteira/comprar" class="flex flex-wrap gap-4 items-end p-6 bg-white/5 border border-white/10 rounded-2xl">
+            <label class="flex-1 min-w-[200px]">
+                <span class="block text-sm text-white/50 mb-2">ativo</span>
+                <select
+                    name="asset_id"
+                    required
+                    class="w-full px-4 py-3 bg-slate-900 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-400/50 transition-all duration-300"
+                >
+                    {% for asset in assets %}
+                    <option value="{{ asset.id }}">{{ asset.name }} — R$ {{ asset.unit_value_brl() }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="flex-1 min-w-[160px]">
+                <span class="block text-sm text-white/50 mb-2">quantidade</span>
+                <input
+                    type="number"
+                    name="quantity"
+                    step="any"
+                    min="0"
+                    required
+                    placeholder="0,00"
+                    class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/25 focus:outline-none focus:border-cyan-400/50 transition-all duration-300"
+                >
+            </label>
+
+            <button type="submit" class="px-6 py-3 bg-cyan-500/20 border border-cyan-400/30 rounded-xl text-cyan-400 hover:bg-cyan-500/30 hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] transition-all duration-300">comprar</button>
+        </form>
+        {% endif %}
+    </section>
+
+</main>
+{% endblock %}

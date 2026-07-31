@@ -1,1 +1,7 @@
 /target
+
+# Segredos locais — use .env.example como modelo
+.env
+
+# Snapshots rejeitados pelo insta
+*.snap.new

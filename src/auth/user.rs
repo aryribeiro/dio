@@ -4,14 +4,21 @@ use axum::extract::FromRequestParts;
 use axum_extra::extract::CookieJar;
 use jwt_simple::{
     claims::Claims,
-    prelude::{Duration, HS256Key, MACLike},
+    prelude::{Duration, MACLike},
 };
 use password_auth::VerifyError;
 use serde::{Deserialize, Serialize};
 
-use crate::{app::AppState, error::AppError, repository::Repository};
+use crate::{app::AppState, config, error::AppError, repository::Repository};
 
-const SECRET_KEY: &[u8] = b"im-so-secret";
+/// Por quanto tempo uma sessão continua válida sem novo login.
+pub const SESSION_DURATION_MINS: u64 = 60 * 12;
+
+/// Tamanho mínimo de senha aceito no cadastro.
+const MIN_PASSWORD_LEN: usize = 8;
+
+/// Tamanho máximo de nome de usuário, para não gravar lixo no banco.
+const MAX_USERNAME_LEN: usize = 40;
 
 pub struct UnauthenticatedUser {
     username: String,
@@ -21,6 +28,34 @@ pub struct UnauthenticatedUser {
 impl UnauthenticatedUser {
     pub fn new(username: String, password: String) -> Self {
         Self { username, password }
+    }
+
+    /// Confere se as credenciais têm forma aceitável antes de tocar no banco.
+    ///
+    /// Só se aplica ao cadastro: no login a senha é comparada com o hash
+    /// existente, e recusar uma senha antiga por ser curta trancaria a pessoa
+    /// para fora da própria conta.
+    pub fn validate_for_signup(&self) -> Result<(), AppError> {
+        let username = self.username.trim();
+
+        if username.is_empty() || username.len() > MAX_USERNAME_LEN {
+            return Err(AppError::InvalidUsername);
+        }
+
+        if !username
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')
+        {
+            return Err(AppError::InvalidUsername);
+        }
+
+        if self.password.len() < MIN_PASSWORD_LEN {
+            return Err(AppError::PasswordTooShort {
+                minimum: MIN_PASSWORD_LEN,
+            });
+        }
+
+        Ok(())
     }
 
     pub async fn authenticate(&self, repository: &Repository) -> Result<User, AppError> {
@@ -37,8 +72,11 @@ impl UnauthenticatedUser {
     }
 
     pub async fn register(self, repository: &Repository) -> Result<User, AppError> {
-        let password_hash = password_auth::generate_hash(self.password);
-        let user_record = match repository.add_user(&self.username, &password_hash).await {
+        self.validate_for_signup()?;
+
+        let password_hash = password_auth::generate_hash(&self.password);
+        let username = self.username.trim();
+        let user_record = match repository.add_user(username, &password_hash).await {
             Ok(user_record) => user_record,
             Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
                 return Err(AppError::UsernameTaken);
@@ -69,15 +107,19 @@ impl User {
     }
 
     pub fn auth_token(self) -> Result<String, AppError> {
-        let key = HS256Key::from_bytes(SECRET_KEY);
-        let claims = Claims::with_custom_claims(UserClaims::from(self), Duration::from_mins(10));
-        let token = key.authenticate(claims)?;
+        let claims = Claims::with_custom_claims(
+            UserClaims::from(self),
+            Duration::from_mins(SESSION_DURATION_MINS),
+        );
+        let token = config::secrets().jwt_key().authenticate(claims)?;
         Ok(token)
     }
 
     pub fn from_auth_token(token: &str) -> Result<Self, AppError> {
-        let key = HS256Key::from_bytes(SECRET_KEY);
-        let claims: UserClaims = key.verify_token(token, None)?.custom;
+        let claims: UserClaims = config::secrets()
+            .jwt_key()
+            .verify_token::<UserClaims>(token, None)?
+            .custom;
         Ok(Self::new(claims.id, claims.username))
     }
 }

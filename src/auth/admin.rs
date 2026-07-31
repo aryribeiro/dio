@@ -1,8 +1,6 @@
 use axum::{extract::FromRequestParts, http::header::AUTHORIZATION};
 
-use crate::{app::AppState, error::AppError};
-
-const ADMIN_SECRET_KEY: &str = "im-the-admin";
+use crate::{app::AppState, config, error::AppError};
 
 pub struct Admin;
 
@@ -17,7 +15,7 @@ impl FromRequestParts<AppState> for Admin {
             return Err(AppError::MissingAuthorization);
         };
 
-        if auth == ADMIN_SECRET_KEY {
+        if auth == config::secrets().admin_secret() {
             Ok(Admin)
         } else {
             Err(AppError::InvalidCredentials)

@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH position AS (\n                       UPDATE holdings\n                       SET quantity = $3\n                       WHERE user_id = $1 AND asset_id = $2\n                       RETURNING asset_id, quantity\n                   )\n                   SELECT p.asset_id AS \"asset_id!\",\n                          a.name AS \"name!\",\n                          a.unit_value AS \"unit_value!\",\n                          p.quantity AS \"quantity!\"\n                   FROM position p\n                   JOIN assets a ON a.id = p.asset_id;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "asset_id!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "unit_value!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "quantity!",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "eeb9ddd07a44bd59c62df6a3f1ec425234e24651431fc8658ce0588126df926e"
+}

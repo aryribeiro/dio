@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH position AS (\n                   INSERT INTO holdings (user_id, asset_id, quantity)\n                   VALUES ($1, $2, $3)\n                   ON CONFLICT (user_id, asset_id)\n                   DO UPDATE SET quantity = holdings.quantity + EXCLUDED.quantity\n                   RETURNING asset_id, quantity\n               )\n               SELECT p.asset_id AS \"asset_id!\",\n                      a.name AS \"name!\",\n                      a.unit_value AS \"unit_value!\",\n                      p.quantity AS \"quantity!\"\n               FROM position p\n               JOIN assets a ON a.id = p.asset_id;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "asset_id!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "unit_value!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "quantity!",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bf679a4a92514a36e3f1f935188b5b861c7b52d28bba3bc0b9b35ec1230fb110"
+}

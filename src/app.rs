@@ -6,7 +6,7 @@ use tracing_subscriber::{
     Layer, fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
-use crate::routes;
+use crate::{config, routes};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -17,6 +17,11 @@ impl AppState {
     async fn new() -> color_eyre::Result<Self> {
         let database_url = std::env::var("DATABASE_URL")?;
         let db = PgPool::connect(&database_url).await?;
+
+        // Aplica as migrações pendentes no boot, para que subir a aplicação em
+        // uma máquina nova não exija rodar o sqlx-cli à mão.
+        sqlx::migrate!().run(&db).await?;
+        info!("Migrations applied");
 
         Ok(Self { db })
     }
@@ -32,7 +37,14 @@ impl App {
 
         tracing_subscriber::registry().with(layer).init();
 
-        dotenvy::dotenv()?;
+        // O `.env` é opcional: em produção as variáveis costumam vir do próprio
+        // ambiente, e a ausência do arquivo não deveria derrubar o processo.
+        if let Err(err) = dotenvy::dotenv() {
+            info!("No .env file loaded: {err}");
+        }
+
+        config::init()?;
+
         let state = AppState::new().await?;
 
         let listener = TcpListener::bind("0.0.0.0:3000").await?;
@@ -41,7 +53,7 @@ impl App {
             .merge(routes::frontend::router())
             .with_state(state);
 
-        info!("Starting service");
+        info!("Listening on http://localhost:3000");
 
         axum::serve(listener, router).await?;
 
